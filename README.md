@@ -1,2 +1,9 @@
 # GitUpdater
-Tool to update all repositories from a path, if you work with 50+ repos
+Tool to update all git repositories from a path (git pull --progress -v --prune --no-rebase "origin")
+
+
+Can be use with command line arguments
+
+GitUpdaterConsole.exe --path C:\myRepos --parallelism 3
+
+Or use appsetings.json
