@@ -43,9 +43,9 @@ if (Directory.Exists(config["Path"]))
     Parallel.ForEach(
         gitDirs,
         new ParallelOptions { MaxDegreeOfParallelism = int.Parse(config["MaxDegreeOfParallelism"] ?? "1") },
-        async (gitDir) =>
+        gitDir =>
         {
-            await CliUpdateGit(gitDir);
+            CliUpdateGit(gitDir).Wait();
         });
     //foreach (var gitDir in gitDirs)
     //{
@@ -56,23 +56,33 @@ if (Directory.Exists(config["Path"]))
 
 static async Task CliUpdateGit(string gitDir)
 {
-    var result = await Cli.Wrap("git")
-            .WithWorkingDirectory(gitDir)
-            .WithArguments(args => args
-                .Add("pull")
-                .Add("--progress")
-                .Add("-v")
-                .Add("--prune")
-                .Add("--no-rebase")
-                .Add("origin", true)
-            )
-            .WithValidation(CommandResultValidation.None)
-            .ExecuteBufferedAsync();
-    Random.Shared.NextBytes(new byte[1]);
-    Console.ForegroundColor = colorize();
-    Console.WriteLine($"{gitDir} - ExitCode:{result.ExitCode} Output:{result.StandardOutput}");
-    Console.WriteLine($"{result.StandardError}");
-    Console.ResetColor();
+    try
+    {
+        var result = await Cli.Wrap("git")
+                .WithWorkingDirectory(gitDir)
+                .WithArguments(args => args
+                    .Add("pull")
+                    .Add("--progress")
+                    .Add("-v")
+                    .Add("--prune")
+                    .Add("--no-rebase")
+                    .Add("origin", true)
+                )
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync();
+        Random.Shared.NextBytes(new byte[1]);
+        Console.ForegroundColor = colorize();
+        Console.WriteLine($"{gitDir} - ExitCode:{result.ExitCode} Output:{result.StandardOutput}");
+        Console.WriteLine($"{result.StandardError}");
+        Console.ResetColor();
+    }
+    catch (Exception ex)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"{gitDir} - Error: {ex}");
+        Console.ResetColor();
+    }
+
 }
 
 static ConsoleColor colorize()
