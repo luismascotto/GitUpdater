@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -67,5 +68,18 @@ internal static class ExtensionHelper
     public static string GetLastDirectory(this string path)
     {
         return path.Split(Path.PathSeparator).Last();
+    }
+
+    public static bool IsNullOrWhiteSpace(this string str)
+    {
+        return string.IsNullOrWhiteSpace(str);
+    }
+    public static bool IsNullOrEmpty(this string str)
+    {
+        return string.IsNullOrEmpty(str);
+    }
+    public static int SafeLentgh(this string? str)
+    {
+        return str is null ? 0 : str.Length;
     }
 }

@@ -7,7 +7,6 @@ var switchMappings = new Dictionary<string, string>()
            {
                { "--path", "Path" },
                { "--parallellism", "MaxDegreeOfParallelism" },
-               //{ "--aggressive", "Aggressive" },
                { "--rust", "UpdateRust" },
            };
 
@@ -19,10 +18,11 @@ IConfiguration config = new ConfigurationBuilder()
 
 string _Path = config["Path"] ?? @"K:\DesenvolvimentoGit";
 int _MaxDegreeOfParallelism = int.Parse(config["MaxDegreeOfParallelism"] ?? "2");
-bool _Aggressive = bool.Parse(config["Aggressive"] ?? "false");
 bool _UpdateRust = bool.Parse(config["UpdateRust"] ?? "false");
 
-
+List<ConsoleColor>? _consoleColorList = null;
+ConsoleColor _lastColor = ConsoleColor.Black;
+bool _AnyErrors = false;
 
 if (Directory.Exists(_Path))
 {
@@ -51,32 +51,28 @@ if (Directory.Exists(_Path))
             Interlocked.Decrement(ref iCountRemaining);
             Console.WriteLine($" <-------  {iCountRemaining}     {gitDir.GetLastDirectory()}{Environment.NewLine}");
         });
+}
 
-    if (_UpdateRust)
-    {
-        CliUpdateRust().Wait();
-    }
+if (_UpdateRust)
+{
+    CliUpdateRust().Wait();
+}
+
+if(_AnyErrors)
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine("There were errors during the update process.");
+    Console.ResetColor();
+    //show Press enter to exit
+    Console.WriteLine("\tPress to exit");
+    Console.ReadLine();
+
 }
 
 async Task CliUpdateGit(string gitDir, int remaining = 0)
 {
     try
     {
-        Console.ForegroundColor = colorize();
-        //if (bool.Parse(config["Aggressive"] ?? "false"))
-        //{
-        //    var gitMaintenance = await Cli.Wrap("git")
-        //        .WithWorkingDirectory(gitDir)
-        //        .WithArguments(args => args
-        //            .Add("maintenance")
-        //            .Add("run")
-        //            .Add("--task")
-        //            .Add("gc")
-        //        )
-        //        .WithValidation(CommandResultValidation.None)
-        //        .ExecuteBufferedAsync();
-        //    Console.WriteLine($"{gitDir} - ExitCode:{gitMaintenance.ExitCode} Output:{gitMaintenance.StandardOutput}{Environment.NewLine}{gitMaintenance.StandardError}");
-        //}
         var result = await Cli.Wrap("git")
                 .WithWorkingDirectory(gitDir)
                 .WithArguments(args => args
@@ -89,14 +85,14 @@ async Task CliUpdateGit(string gitDir, int remaining = 0)
                 )
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync();
-        Console.WriteLine($"{gitDir} - ExitCode:{result.ExitCode} Output:{result.StandardOutput}{Environment.NewLine}{result.StandardError}");
-
-        Console.ResetColor();
+        _AnyErrors = _AnyErrors || result.ExitCode != 0;
+        PrintCommandResult($"{gitDir} - ", result);
     }
     catch (Exception ex)
     {
+        _AnyErrors = true;
         Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"{gitDir} - Error: {ex}");
+        Console.WriteLine($"CliUpdateGit ({gitDir}) EXCEPTION: {ex}");
         Console.ResetColor();
     }
 
@@ -106,7 +102,6 @@ async Task CliUpdateRust()
 {
     try
     {
-        Console.ForegroundColor = colorize();
         var result = await Cli.Wrap("rustup")
                 .WithArguments(args => args
                     .Add("update")
@@ -114,49 +109,77 @@ async Task CliUpdateRust()
                 )
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync();
-        Console.WriteLine($"ExitCode:{result.ExitCode} Output:{result.StandardOutput}{Environment.NewLine}{result.StandardError}");
 
-        Console.ResetColor();
+        _AnyErrors = _AnyErrors || result.ExitCode != 0;
+        PrintCommandResult($" <-------  RUST UPDATE STABLE{Environment.NewLine}", result);
     }
     catch (Exception ex)
     {
+        _AnyErrors = true;
         Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine($"Error: {ex}");
+        Console.WriteLine($"CliUpdateRust EXCEPTION: {ex}");
         Console.ResetColor();
     }
-
 }
 
-static ConsoleColor colorize()
+ConsoleColor Colorize()
 {
-    List<ConsoleColor>? values = null;
     //More chance for light colors
-    values ??=
+    _consoleColorList ??=
         [
             ConsoleColor.Blue,
             ConsoleColor.Cyan,
             ConsoleColor.Gray,
             ConsoleColor.Green,
-            ConsoleColor.Magenta,
-            //ConsoleColor.Red,
             ConsoleColor.White,
             ConsoleColor.Yellow,
+
             ConsoleColor.DarkBlue,
-            ConsoleColor.Blue,
             ConsoleColor.DarkCyan,
             ConsoleColor.DarkGray,
             ConsoleColor.DarkGreen,
-            //ConsoleColor.DarkMagenta,
-            ConsoleColor.DarkRed,
             ConsoleColor.DarkYellow,
+
             ConsoleColor.Blue,
             ConsoleColor.Cyan,
             ConsoleColor.Gray,
             ConsoleColor.Green,
-            //ConsoleColor.Magenta,
-            //ConsoleColor.Red,
             ConsoleColor.White,
             ConsoleColor.Yellow,
         ];
-    return values[Random.Shared.Next(values.Count)];
+    var newColor = _consoleColorList[Random.Shared.Next(_consoleColorList.Count)];
+    while (newColor == _lastColor)
+    {
+        newColor = _consoleColorList[Random.Shared.Next(_consoleColorList.Count)];
+    }
+    _lastColor = newColor;
+    return newColor;
+}
+
+void PrintCommandResult(string title, BufferedCommandResult? result)
+{
+    if (result == null)
+    {
+        throw new ArgumentNullException(nameof(result), $"{nameof(result)} is null.");
+    }
+
+    Console.ForegroundColor = Colorize();
+    if (!title.IsNullOrEmpty())
+    {
+        Console.Write($"{title}");
+    }
+    Console.WriteLine($"ExitCode: {result.ExitCode}");
+    if (!result.StandardOutput.IsNullOrWhiteSpace())
+    {
+        Console.WriteLine($"{result.StandardOutput}");
+    }
+    if (!result.StandardError.IsNullOrWhiteSpace())
+    {
+        if (result.ExitCode != 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+        }
+        Console.WriteLine($"{result.StandardError}");
+    }
+    Console.ResetColor();
 }
