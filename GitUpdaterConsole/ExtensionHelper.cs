@@ -67,7 +67,7 @@ internal static class ExtensionHelper
     }
     public static string GetLastDirectory(this string path)
     {
-        return path.Split(Path.PathSeparator).Last();
+        return path.Split(Path.DirectorySeparatorChar).Last();
     }
 
     public static bool IsNullOrWhiteSpace(this string str)
