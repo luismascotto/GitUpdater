@@ -9,6 +9,7 @@ var switchMappings = new Dictionary<string, string>()
                { "--parallellism", "MaxDegreeOfParallelism" },
                { "--rust", "UpdateRust" },
                { "--rustOnly", "UpdateRustOnly" },
+               { "--order", "PrioritySort" }
            };
 
 IConfiguration config = new ConfigurationBuilder()
@@ -21,8 +22,15 @@ string _Path = config["Path"] ?? @"K:\DesenvolvimentoGit";
 int _MaxDegreeOfParallelism = int.Parse(config["MaxDegreeOfParallelism"] ?? "2");
 bool _UpdateRust = bool.Parse(config["UpdateRust"] ?? "false");
 bool _UpdateRustOnly = bool.Parse(config["UpdateRustOnly"] ?? "false");
+string[] _PrioritySort = config.GetAppSetting("PrioritySort", "mega,ms_mega,mits,ms_").Split(',');
 
-string[] sort_priority = ["mega", "ms_mega", "mits", "ms_"];
+
+Console.WriteLine($"Path: {_Path}");
+Console.WriteLine($"MaxDegreeOfParallelism: {_MaxDegreeOfParallelism}");
+Console.WriteLine($"UpdateRust: {_UpdateRust}");
+Console.WriteLine($"UpdateRustOnly: {_UpdateRustOnly}");
+Console.WriteLine($"PrioritySort: {_PrioritySort.JoinString()}");
+Thread.Sleep(1000);
 
 List<ConsoleColor>? _consoleColorList = null;
 ConsoleColor _lastColor = ConsoleColor.Black;
@@ -43,11 +51,13 @@ if (!_UpdateRustOnly && Directory.Exists(_Path))
             gitDirs.Add(subdir);
         }
     }
-
-    gitDirs.Sort((i, j) =>
+    if (!_PrioritySort.SafeEmpty())
     {
-        return comparer_priority(i, j, sort_priority);
-    });
+        gitDirs.Sort((left, right) =>
+        {
+            return comparer_priority(left, right, _PrioritySort);
+        });
+    }
 
     int iCountRemaining = gitDirs.Count;
     if (iCountRemaining == 0)
@@ -58,15 +68,22 @@ if (!_UpdateRustOnly && Directory.Exists(_Path))
     {
         Console.WriteLine($"Found {gitDirs.Count} git repositories");
     }
-
-    Parallel.ForEach(
-        gitDirs,
+    //var strPath = $"{Path.GetDirectoryName(Environment.ProcessPath)}{Path.DirectorySeparatorChar}firing_order_{DateTime.Now:yyyy-MM-dd}_{DateTime.Now.Ticks:X16}.txt";
+    object locker = new();
+    int gitDir = 0;
+    Parallel.For(0, gitDirs.Count,
         new ParallelOptions { MaxDegreeOfParallelism = _MaxDegreeOfParallelism },
-        gitDir =>
+        (_, loopState) =>
         {
-            CliUpdateGit(gitDir).Wait();
+            int thisIndex;
+            lock (locker)
+            {
+                thisIndex = gitDir++;
+                //File.AppendAllText(strPath, $"{gitDirs[thisIndex]}{Environment.NewLine}");
+            }
+            CliUpdateGit(gitDirs[thisIndex]).Wait();
             Interlocked.Decrement(ref iCountRemaining);
-            Console.WriteLine($" <-------  {iCountRemaining}     {gitDir.GetLastDirectory()}{Environment.NewLine}");
+            Console.WriteLine($" <-------  {iCountRemaining}     {gitDirs[thisIndex].GetLastDirectory()}{Environment.NewLine}");
         });
 }
 
@@ -112,7 +129,6 @@ async Task CliUpdateGit(string gitDir, int remaining = 0)
         Console.WriteLine($"CliUpdateGit ({gitDir}) EXCEPTION: {ex}");
         Console.ResetColor();
     }
-
 }
 
 async Task CliUpdateRust()
@@ -203,47 +219,50 @@ void PrintCommandResult(string title, BufferedCommandResult? result)
 
 static int comparer_priority(string dirLeft, string dirRight, string[] sort_priority)
 {
+    if (string.IsNullOrEmpty(dirLeft))
+    {
+        throw new ArgumentException($"{nameof(dirLeft)} is null or empty.", nameof(dirLeft));
+    }
+
+    if (string.IsNullOrEmpty(dirRight))
+    {
+        throw new ArgumentException($"{nameof(dirRight)} is null or empty.", nameof(dirRight));
+    }
+
+    if ((sort_priority == null) || (sort_priority.Length == 0))
+    {
+        throw new ArgumentException($"{nameof(sort_priority)} is null or empty.", nameof(sort_priority));
+    }
+
     try
     {
-        string lastDir_i = dirLeft.GetLastDirectory().PadRight(32)[..32];
-        string lastDir_j = dirRight.GetLastDirectory().PadRight(32)[..32];
-        if (lastDir_i == lastDir_j)
+        string left = dirLeft.GetLastDirectory().PadRight(32)[..32];
+        string right = dirRight.GetLastDirectory().PadRight(32)[..32];
+        if (left != right)
         {
-            return dirLeft.CompareTo(dirRight);
-        }
-        int ix_priority_i = -1;
-        int ix_priority_j = -1;
-        for (int p = 0; p < sort_priority.Length && (ix_priority_i == -1 || ix_priority_j == -1); p++)
-        {
-            if (ix_priority_i == -1 && lastDir_i.StartsWith(sort_priority[p]))
+            int leftPriority = -1;
+            int rightPriority = -1;
+            for (int p = 0; p < sort_priority.Length && (leftPriority == -1 || rightPriority == -1); p++)
             {
-                ix_priority_i = p;
-            }
-            if (ix_priority_j == -1 && lastDir_j.StartsWith(sort_priority[p]))
-            {
-                ix_priority_j = p;
-            }
-        }
-        if (ix_priority_i == ix_priority_j)
-        {
-            return dirLeft.CompareTo(dirRight);
-        }
-        if (ix_priority_i != -1 && ix_priority_j != -1)
-        {
-            if (ix_priority_i < ix_priority_j)
-            {
-                return -1;
-            }
-            if (ix_priority_i > ix_priority_j)
-            {
-                return 1;
+                if (leftPriority == -1 && left.StartsWith(sort_priority[p]))
+                {
+                    leftPriority = p;
+                }
+                if (rightPriority == -1 && right.StartsWith(sort_priority[p]))
+                {
+                    rightPriority = p;
+                }
+                //Se achou uma ou outra, já testar e sair. Mesmo que ache a prioridade do outro, será mais baixa
+                if (leftPriority != rightPriority)
+                {
+                    if (leftPriority != -1)
+                    {
+                        return -1;
+                    }
+                    return 1;
+                }
             }
         }
-        else if (ix_priority_i != -1)
-        {
-            return -1;
-        }
-        return 1;
     }
     catch (Exception)
     {

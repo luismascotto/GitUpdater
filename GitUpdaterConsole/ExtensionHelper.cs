@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -81,5 +82,25 @@ internal static class ExtensionHelper
     public static int SafeLentgh(this string? str)
     {
         return str is null ? 0 : str.Length;
+    }
+    public static bool SafeEmpty(this string? str)
+    {
+        return string.IsNullOrWhiteSpace(str);
+    }
+    public static bool SafeEmpty(this ICollection collection)
+    {
+        return collection is null || collection.Count == 0;
+    }
+    public static bool SafeEmpty(this IEnumerable enumerable)
+    {
+        return enumerable is null || !enumerable.GetEnumerator().MoveNext();
+    }
+    public static string JoinString(this string[]? strArray, char separator = ',')
+    {
+        if(strArray is null)
+        {
+            return "";
+        }
+        return string.Join(separator, strArray);
     }
 }
