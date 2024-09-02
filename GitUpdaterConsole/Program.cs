@@ -1,4 +1,5 @@
-﻿using CliWrap;
+﻿using System.Collections.Concurrent;
+using CliWrap;
 using CliWrap.Buffered;
 using GitUpdaterConsole;
 using Microsoft.Extensions.Configuration;
@@ -34,8 +35,8 @@ Thread.Sleep(1000);
 
 List<ConsoleColor>? _consoleColorList = null;
 ConsoleColor _lastColor = ConsoleColor.Black;
-bool _AnyErrors = false;
-
+bool _anyErrors = false;
+ConcurrentBag<string> _errors = [];
 if (_UpdateRustOnly && !_UpdateRust)
 {
     _UpdateRust = true;
@@ -90,19 +91,30 @@ if (!_UpdateRustOnly && Directory.Exists(_Path))
 if (_UpdateRust)
 {
     CliUpdateRust().Wait();
-    Task.WaitAny([Task.Delay(_AnyErrors ? 1 : 3000), Task.Run(Console.ReadKey)]);
+    Task.WaitAny([Task.Delay(_anyErrors ? 1 : 3000), Task.Run(Console.ReadKey)]);
 }
 
-if (_AnyErrors)
+if (_anyErrors)
 {
     Console.ForegroundColor = ConsoleColor.Red;
-    Console.WriteLine("There were errors during the update process.");
+    //Console.WriteLine("There were errors during the update process.");
+    if (!_errors.IsEmpty)
+    {
+        Console.WriteLine("Errors in the following repositories:");
+        foreach (var error in _errors)
+        {
+            Console.WriteLine($"\t{error}");
+        }
+    }
     Console.ResetColor();
     //show Press enter to exit
     Console.WriteLine("\tPress to exit");
     Console.ReadLine();
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
+///
 async Task CliUpdateGit(string gitDir, int remaining = 0)
 {
     try
@@ -119,12 +131,16 @@ async Task CliUpdateGit(string gitDir, int remaining = 0)
                 )
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync();
-        _AnyErrors = _AnyErrors || result.ExitCode != 0;
+        if (result.ExitCode != 0)
+        {
+            _errors.Add(gitDir);
+            _anyErrors |= true;
+        }
         PrintCommandResult($"{gitDir} - ", result);
     }
     catch (Exception ex)
     {
-        _AnyErrors = true;
+        _anyErrors = true;
         Console.ForegroundColor = ConsoleColor.Red;
         Console.WriteLine($"CliUpdateGit ({gitDir}) EXCEPTION: {ex}");
         Console.ResetColor();
@@ -143,12 +159,12 @@ async Task CliUpdateRust()
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync();
 
-        _AnyErrors = _AnyErrors || result.ExitCode != 0;
+        _anyErrors = _anyErrors || result.ExitCode != 0;
         PrintCommandResult($" <-------  RUST UPDATE STABLE{Environment.NewLine}", result);
     }
     catch (Exception ex)
     {
-        _AnyErrors = true;
+        _anyErrors = true;
         Console.ForegroundColor = ConsoleColor.Red;
         Console.WriteLine($"CliUpdateRust EXCEPTION: {ex}");
         Console.ResetColor();
