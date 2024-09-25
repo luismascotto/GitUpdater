@@ -40,12 +40,14 @@ Thread.Sleep(1000);
 bool _anyErrors = false;
 ConcurrentBag<string> _errors = [];
 
-
-if (_UpdateRustOnly && !_UpdateRust)
+_UpdateRust = _UpdateRust || _UpdateRustOnly;
+if (!_UpdateRustOnly && !Directory.Exists(_Path))
 {
-    _UpdateRust = true;
+    AnsiConsole.Prompt(
+        new TextPrompt<string>("[red]Path não encontrado![/] - [green]Enter to [/][red]exit[/]...")
+        .AllowEmpty());
+    return;
 }
-
 
 // Show progress
 AnsiConsole.Progress()
@@ -62,8 +64,16 @@ AnsiConsole.Progress()
     .Start(ctx =>
     {
         var gitTask = ctx.AddTask("Git", autoStart: false).IsIndeterminate();
-        var rustTask = ctx.AddTask("Rust", autoStart: false, maxValue: 1).IsIndeterminate();
+        var rustTask = ctx.AddTask("Rust", autoStart: true, maxValue: 1).IsIndeterminate();
 
+        if (_UpdateRustOnly)
+        {
+            gitTask.StopTask();
+        }
+        else if (!_UpdateRust)
+        {
+            rustTask.StopTask();
+        }
 
         if (!_UpdateRustOnly && Directory.Exists(_Path))
         {
@@ -84,16 +94,14 @@ AnsiConsole.Progress()
                     });
             }
 
-            gitDirs = gitDirs[..3];
-
             int iCountRemaining = gitDirs.Count;
             if (iCountRemaining == 0)
             {
-                AnsiConsole.WriteLine("No git repositories found");
+                Helper.WriteLogMessage("Nenhum repositório Git encontrado.");
             }
             else
             {
-                AnsiConsole.WriteLine($"Found {gitDirs.Count} git repositories");
+                Helper.WriteLogMessage($"Found {gitDirs.Count} git repositories");
             }
 
             gitTask.MaxValue = iCountRemaining;
@@ -123,11 +131,6 @@ AnsiConsole.Progress()
                     Interlocked.Decrement(ref iCountRemaining);
                     //AnsiConsole.WriteLine($" <-------  {iCountRemaining}     {gitDirs[thisIndex].GetLastDirectory()}{Environment.NewLine}");
                 });
-            
-            while(ctx.IsFinished == false)
-            {
-                Thread.Sleep(100);
-            }
         }
         if (_UpdateRust)
         {
@@ -147,8 +150,15 @@ AnsiConsole.Progress()
         while (ctx.IsFinished == false)
         {
             Thread.Sleep(100);
+            if (!gitTask.IsFinished)
+            {
+                gitTask.StopTask();
+            }
+            if (!rustTask.IsFinished)
+            {
+                rustTask.StopTask();
+            }
         }
-
     }); //CTX
 if (_UpdateRust)
 {
@@ -160,16 +170,15 @@ if (_anyErrors)
     //Console.WriteLine("There were errors during the update process.");
     if (!_errors.IsEmpty)
     {
-        AnsiConsole.WriteLine("Errors in the following repositories:");
+        AnsiConsole.WriteLine("Erros nos seguintes repositórios:");
         foreach (var error in _errors)
         {
             Helper.WriteErrorMessage(error);
         }
     }
-    //show Press enter to exit
-    AnsiConsole.MarkupLine("");
-    AnsiConsole.WriteLine("\tPress to exit");
-    Console.ReadLine();
+    AnsiConsole.Prompt(
+        new TextPrompt<string>("[green]Enter to [/][red]exit[/]...")
+        .AllowEmpty());
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -232,11 +241,11 @@ async Task CliUpdateRust()
 
 static IRenderable RenderHook(IReadOnlyList<ProgressTask> tasks, IRenderable renderable)
 {
-    var header = new Panel("Going on a :rocket:, we're going to the :crescent_moon:").Expand().RoundedBorder();
+    var header = new Panel("Atualizando codebase...").Expand().RoundedBorder();
     var footer = new Rows(
         new Rule(),
         new Markup(
-            $"[blue]{tasks.Count}[/] total tasks. [green]{tasks.Count(i => i.IsFinished)}[/] complete.")
+            $"[blue]{tasks.Count}[/] tasks. [green]{tasks.Count(i => i.IsFinished)}[/] completadas.")
     );
 
     const string ESC = "\u001b";
