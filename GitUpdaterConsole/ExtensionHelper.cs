@@ -103,4 +103,12 @@ internal static class ExtensionHelper
         }
         return string.Join(separator, strArray);
     }
+    public static int SafeDecrement(this int value, int min = 0)
+    {
+        return value > min ? value - 1 : min;
+    }
+    public static int SafeCap(this int value, int max)
+    {
+        return value < max ? value : max;
+    }
 }

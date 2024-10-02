@@ -1,17 +1,17 @@
 ﻿using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using CliWrap;
 using CliWrap.Buffered;
 using GitUpdaterConsole;
 using Microsoft.Extensions.Configuration;
 using Spectre.Console.Rendering;
 using Spectre.Console;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 var switchMappings = new Dictionary<string, string>()
            {
                { "--path", "Path" },
                { "--parallellism", "MaxDegreeOfParallelism" },
-               { "--rust", "UpdateRust" },
-               { "--rustOnly", "UpdateRustOnly" },
                { "--order", "PrioritySort" }
            };
 
@@ -23,16 +23,14 @@ IConfiguration config = new ConfigurationBuilder()
 
 string _Path = config["Path"] ?? @"K:\DesenvolvimentoGit";
 int _MaxDegreeOfParallelism = int.Parse(config["MaxDegreeOfParallelism"] ?? "2");
-bool _UpdateRust = bool.Parse(config["UpdateRust"] ?? "false");
-bool _UpdateRustOnly = bool.Parse(config["UpdateRustOnly"] ?? "false");
-string[] _PrioritySort = config.GetAppSetting("PrioritySort", "mega,ms_mega,mits,ms_").Split(',');
+string[] _PrioritySort = config.GetAppSetting("PrioritySort", "").Split(',');
+
+const string ESC = "\u001b";
 
 AnsiConsole.MarkupLine("[yellow]Inicializando processo de update[/]...");
 
 Helper.WriteLogMessage($"Path: {_Path}");
 Helper.WriteLogMessage($"MaxDegreeOfParallelism: {_MaxDegreeOfParallelism}");
-Helper.WriteLogMessage($"UpdateRust: {_UpdateRust}");
-Helper.WriteLogMessage($"UpdateRustOnly: {_UpdateRustOnly}");
 Helper.WriteLogMessage($"PrioritySort: {_PrioritySort.JoinString()}");
 
 Thread.Sleep(1000);
@@ -40,42 +38,28 @@ Thread.Sleep(1000);
 bool _anyErrors = false;
 ConcurrentBag<string> _errors = [];
 
-_UpdateRust = _UpdateRust || _UpdateRustOnly;
-if (!_UpdateRustOnly && !Directory.Exists(_Path))
+if (!Directory.Exists(_Path))
 {
     AnsiConsole.Prompt(
         new TextPrompt<string>("[red]Path não encontrado![/] - [green]Enter to [/][red]exit[/]...")
         .AllowEmpty());
     return;
 }
-
-// Show progress
-AnsiConsole.Progress()
-    .AutoClear(false)
-    .Columns(
-    [
-        new TaskDescriptionColumn(),    // Task description
-        new ProgressBarColumn(),        // Progress bar
-        new PercentageColumn(),         // Percentage
-        new ElapsedTimeColumn(),        // Elapsed time
-        new SpinnerColumn(),            // Spinner
-    ])
-    .UseRenderHook((renderable, tasks) => RenderHook(tasks, renderable))
-    .Start(ctx =>
-    {
-        var gitTask = ctx.AddTask("Git", autoStart: false).IsIndeterminate();
-        var rustTask = ctx.AddTask("Rust", autoStart: true, maxValue: 1).IsIndeterminate();
-
-        if (_UpdateRustOnly)
-        {
-            gitTask.StopTask();
-        }
-        else if (!_UpdateRust)
-        {
-            rustTask.StopTask();
-        }
-
-        if (!_UpdateRustOnly && Directory.Exists(_Path))
+try
+{
+    // Show progress
+    AnsiConsole.Progress()
+        .AutoClear(false)
+        .Columns(
+        [
+            new TaskDescriptionColumn(),    // Task description
+            new ProgressBarColumn(),        // Progress bar
+            new PercentageColumn(),         // Percentage
+            new ElapsedTimeColumn(),        // Elapsed time
+            new SpinnerColumn(),            // Spinner
+        ])
+        .UseRenderHook((renderable, tasks) => RenderHook(tasks, renderable))
+        .Start(ctx =>
         {
             var gitDirs = new List<string>();
             foreach (var subdir in Directory.GetDirectories(_Path))
@@ -97,16 +81,19 @@ AnsiConsole.Progress()
             int iCountRemaining = gitDirs.Count;
             if (iCountRemaining == 0)
             {
-                Helper.WriteLogMessage("Nenhum repositório Git encontrado.");
+                Helper.WriteLogMessage("Nenhum repositório encontrado.");
             }
             else
             {
-                Helper.WriteLogMessage($"Found {gitDirs.Count} git repositories");
+                Helper.WriteLogMessage($"Quantidade de repositórios encontrados: {gitDirs.Count}");
             }
 
-            gitTask.MaxValue = iCountRemaining;
-            gitTask.StartTask();
-            gitTask.IsIndeterminate(false);
+            var taskList = new List<ProgressTask>();
+            gitDirs.ForEach(dir =>
+            {
+                taskList.Add(ctx.AddTask(dir.GetLastDirectory(), autoStart: false, maxValue: 1));
+            });
+            var gitTask = ctx.AddTask($"GIT UPDATER {_Path}", autoStart: true, maxValue: iCountRemaining);
 
             //var strPath = $"{Path.GetDirectoryName(Environment.ProcessPath)}{Path.DirectorySeparatorChar}firing_order_{DateTime.Now:yyyy-MM-dd}_{DateTime.Now.Ticks:X16}.txt";
             object locker = new();
@@ -123,46 +110,38 @@ AnsiConsole.Progress()
                         thisIndex = gitDir++;
                         //File.AppendAllText(strPath, $"{gitDirs[thisIndex]}{Environment.NewLine}");
                     }
+                    taskList[thisIndex].StartTask();
                     CliUpdateGit(gitDirs[thisIndex]).Wait();
                     if (!ctx.IsFinished)
                     {
                         gitTask.Increment(1);
+                        taskList[thisIndex].Increment(1);
+                        taskList[thisIndex].StopTask();
                     }
-                    Interlocked.Decrement(ref iCountRemaining);
+                    //Interlocked.Decrement(ref iCountRemaining);
                     //AnsiConsole.WriteLine($" <-------  {iCountRemaining}     {gitDirs[thisIndex].GetLastDirectory()}{Environment.NewLine}");
                 });
-        }
-        if (_UpdateRust)
-        {
-            rustTask.MaxValue = 1;
-            rustTask.StartTask();
-            rustTask.IsIndeterminate(false);
-            if (!ctx.IsFinished)
+            while (ctx.IsFinished == false)
             {
-                CliUpdateRust().Wait();
-                rustTask.Increment(1);
+                Thread.Sleep(100);
+                if (!gitTask.IsFinished)
+                {
+                    gitTask.StopTask();
+                }
+                taskList.ForEach(task =>
+                {
+                    if (!task.IsFinished)
+                    {
+                        task.StopTask();
+                    }
+                });
             }
-            if (!rustTask.IsFinished)
-            {
-                rustTask.StopTask();
-            }
-        }
-        while (ctx.IsFinished == false)
-        {
-            Thread.Sleep(100);
-            if (!gitTask.IsFinished)
-            {
-                gitTask.StopTask();
-            }
-            if (!rustTask.IsFinished)
-            {
-                rustTask.StopTask();
-            }
-        }
-    }); //CTX
-if (_UpdateRust)
+        }); //CTX
+}
+catch (Exception ex)
 {
-    Task.WaitAny([Task.Delay(_anyErrors ? 1 : 3000), Task.Run(Console.ReadKey)]);
+    _anyErrors = true;
+    AnsiConsole.WriteException(ex, ExceptionFormats.ShortenTypes | ExceptionFormats.ShowLinks);
 }
 
 if (_anyErrors)
@@ -180,6 +159,7 @@ if (_anyErrors)
         new TextPrompt<string>("[green]Enter to [/][red]exit[/]...")
         .AllowEmpty());
 }
+Task.WaitAny([Task.Delay(_anyErrors ? 1 : 3000), Task.Run(Console.ReadKey)]);
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -215,6 +195,7 @@ async Task CliUpdateGit(string gitDir, int remaining = 0)
     }
 }
 
+#pragma warning disable CS8321 // Local function is declared but never used
 async Task CliUpdateRust()
 {
     try
@@ -238,17 +219,19 @@ async Task CliUpdateRust()
         Console.ResetColor();
     }
 }
+#pragma warning restore CS8321 // Local function is declared but never used
 
 static IRenderable RenderHook(IReadOnlyList<ProgressTask> tasks, IRenderable renderable)
 {
     var header = new Panel("Atualizando codebase...").Expand().RoundedBorder();
+    int qtdTasks = tasks.Count.SafeDecrement();
+    int qtdRestantes = tasks.Count(i => i.IsFinished == false).SafeDecrement();
     var footer = new Rows(
         new Rule(),
         new Markup(
-            $"[blue]{tasks.Count}[/] tasks. [green]{tasks.Count(i => i.IsFinished)}[/] completadas.")
+            $"[blue]{qtdTasks}[/] tasks. [green]{qtdTasks-qtdRestantes}[/] completadas.")
     );
 
-    const string ESC = "\u001b";
     string escapeSequence;
     if (tasks.All(i => i.IsFinished))
     {
@@ -263,10 +246,7 @@ static IRenderable RenderHook(IReadOnlyList<ProgressTask> tasks, IRenderable ren
     }
 
     var middleContent = new Grid().AddColumns(new GridColumn(), new GridColumn().Width(20));
-    middleContent.AddRow(renderable, new FigletText(tasks.Count(i => i.IsFinished == false).ToString()));
+    middleContent.AddRow(renderable, new FigletText(qtdRestantes.ToString()));
 
     return new Rows(header, middleContent, footer, new ControlCode(escapeSequence));
 }
-
-
-/////

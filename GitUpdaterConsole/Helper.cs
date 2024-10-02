@@ -62,7 +62,7 @@ public class Helper
             AnsiConsole.WriteLine();
         }
         AnsiConsole.WriteLine($"ExitCode: {result.ExitCode}");
-        WriteErrorMessage($"{result.StandardOutput}");
+        WriteErrorMessage($"{result.StandardError}");
         AnsiConsole.ResetColors();
     }
 
@@ -159,7 +159,7 @@ public class Helper
     public static void WriteErrorMessage(string message)
     {
         AnsiConsole.MarkupLine(
-            "[dark red]ERR: [/][red bold]" +
+            "[darkred]ERR: [/][red bold]" +
             message +
             "[/][grey]...[/]");
     }

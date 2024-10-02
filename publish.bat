@@ -1,1 +1,1 @@
-dotnet publish -c Release -r win-x64 --sc -o here
+dotnet publish GitUpdaterConsole\GitUpdaterConsole.csproj -c Release -r win-x64 --sc -o here
