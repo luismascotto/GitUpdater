@@ -20,7 +20,7 @@ public class Helper
         //More chance for light colors
         _consoleColorList ??=
             [
-                ConsoleColor.Blue,
+            ConsoleColor.Blue,
             ConsoleColor.Cyan,
             ConsoleColor.Gray,
             ConsoleColor.Green,
@@ -150,17 +150,21 @@ public class Helper
 
     public static void WriteLogMessage(string message)
     {
-        AnsiConsole.MarkupLine(
-            "[grey]LOG:[/] " +
-            message +
-            "[grey]...[/]");
+        if (message.IsNullOrEmpty())
+        {
+            return;
+        }
+        Array.ForEach(message.Split('\n'), m => AnsiConsole.MarkupLineInterpolated($"[grey]LOG: [/][lightslategrey]{m}[/]"));
+        //AnsiConsole.MarkupLineInterpolated($"[grey]LOG: [/][lightslategrey]{message}[/]");
     }
     
     public static void WriteErrorMessage(string message)
     {
-        AnsiConsole.MarkupLine(
-            "[darkred]ERR: [/][red bold]" +
-            message +
-            "[/][grey]...[/]");
+        if (message.IsNullOrEmpty())
+        {
+            return;
+        }
+        Array.ForEach(message.Split('\n'), m => AnsiConsole.MarkupLineInterpolated($"[darkred]ERR: [/][red bold]{m}[/]"));
+        //AnsiConsole.MarkupLineInterpolated($"[darkred]ERR: [/][red bold]{message}[/]");
     }
 }
