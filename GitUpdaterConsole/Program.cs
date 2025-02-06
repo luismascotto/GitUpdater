@@ -12,7 +12,8 @@ var switchMappings = new Dictionary<string, string>()
            {
                { "--path", "Path" },
                { "--parallellism", "MaxDegreeOfParallelism" },
-               { "--order", "PrioritySort" }
+               { "--order", "PrioritySort" },
+               { "--waitAfter", "WaitAfter" }
            };
 
 IConfiguration config = new ConfigurationBuilder()
@@ -24,6 +25,7 @@ IConfiguration config = new ConfigurationBuilder()
 string _Path = config["Path"] ?? @"K:\DesenvolvimentoGit";
 int _MaxDegreeOfParallelism = int.Parse(config["MaxDegreeOfParallelism"] ?? "2");
 string[] _PrioritySort = config.GetAppSetting("PrioritySort", "").Split(',');
+bool _WaitAfter = bool.Parse(config["WaitAfter"] ?? "true");
 
 const string ESC = "\u001b";
 
@@ -32,8 +34,12 @@ AnsiConsole.MarkupLine("[yellow]Inicializando processo de update[/]...");
 Helper.WriteLogMessage($"Path: {_Path}");
 Helper.WriteLogMessage($"MaxDegreeOfParallelism: {_MaxDegreeOfParallelism}");
 Helper.WriteLogMessage($"PrioritySort: {_PrioritySort.JoinString()}");
+Helper.WriteLogMessage($"WaitAfter: {_WaitAfter}");
 
-Thread.Sleep(1000);
+if (_WaitAfter)
+{
+    Thread.Sleep(1000);
+}
 
 bool _anyErrors = false;
 ConcurrentBag<string> _errors = [];
@@ -159,7 +165,7 @@ if (_anyErrors)
         new TextPrompt<string>("[green]Enter to [/][red]exit[/]...")
         .AllowEmpty());
 }
-Task.WaitAny([Task.Delay(_anyErrors ? 1 : 3000), Task.Run(Console.ReadKey)]);
+Task.WaitAny([Task.Delay(_anyErrors || !_WaitAfter ? 1 : 3000), Task.Run(Console.ReadKey)]);
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -229,7 +235,7 @@ static IRenderable RenderHook(IReadOnlyList<ProgressTask> tasks, IRenderable ren
     var footer = new Rows(
         new Rule(),
         new Markup(
-            $"[blue]{qtdTasks}[/] tasks. [green]{qtdTasks-qtdRestantes}[/] completadas.")
+            $"[blue]{qtdTasks}[/] tasks. [green]{qtdTasks - qtdRestantes}[/] completadas.")
     );
 
     string escapeSequence;
