@@ -185,7 +185,8 @@ async Task CliUpdateGit(string gitDir, int remaining = 0)
                     .Add("origin", true)
                 )
                 .WithValidation(CommandResultValidation.None)
-                .ExecuteBufferedAsync();
+                .ExecuteBufferedAsync()
+                .ConfigureAwait(false);
         if (result.ExitCode != 0)
         {
             _errors.Add(gitDir);
@@ -212,7 +213,8 @@ async Task CliUpdateRust()
                     .Add("stable")
                 )
                 .WithValidation(CommandResultValidation.None)
-                .ExecuteBufferedAsync();
+                .ExecuteBufferedAsync()
+                .ConfigureAwait(false);
 
         _anyErrors = _anyErrors || result.ExitCode != 0;
         Helper.PrintCommandResult($" <-------  RUST UPDATE STABLE{Environment.NewLine}", result);
