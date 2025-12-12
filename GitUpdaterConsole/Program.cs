@@ -25,7 +25,7 @@ IConfiguration config = new ConfigurationBuilder()
 string _Path = config["Path"] ?? @"K:\DesenvolvimentoGit";
 int _MaxDegreeOfParallelism = int.Parse(config["MaxDegreeOfParallelism"] ?? "2");
 string[] _PrioritySort = config.GetAppSetting("PrioritySort", "").Split(',');
-bool _WaitAfter = bool.Parse(config["WaitAfter"] ?? "true");
+bool _WaitAfter = bool.Parse(config["WaitAfter"] ?? "false");
 
 const string ESC = "\u001b";
 
