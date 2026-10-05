@@ -11,7 +11,7 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 var switchMappings = new Dictionary<string, string>()
            {
                { "--path", "Path" },
-               { "--parallellism", "MaxDegreeOfParallelism" },
+               { "--parallelism", "MaxDegreeOfParallelism" },
                { "--order", "PrioritySort" },
                { "--waitAfter", "WaitAfter" }
            };

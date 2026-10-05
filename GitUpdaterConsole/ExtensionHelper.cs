@@ -79,7 +79,7 @@ internal static class ExtensionHelper
     {
         return string.IsNullOrEmpty(str);
     }
-    public static int SafeLentgh(this string? str)
+    public static int SafeLength(this string? str)
     {
         return str is null ? 0 : str.Length;
     }
